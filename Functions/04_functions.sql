@@ -9,3 +9,27 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+--------------------------------------------------------------------------------
+
+-- Valida que el monto sea mayor a 0 y la existencia de configuraciones antes de insertar un gasto.
+CREATE OR REPLACE FUNCTION fn_validar_monto_gasto()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Validamos que el monto ingresado sea mayor a 0.
+    IF NEW.monto <= 0 THEN
+        RAISE EXCEPTION
+            'El monto del gasto debe ser mayor a 0. Recibido: %', NEW.monto;
+    END IF;
+
+    -- Validamos que el usuario tenga una configuración financiera activa.
+    -- Select 1 para nada más saber si existe un registro, no queremos traer todos los registros 
+    IF NOT EXISTS ( 
+        SELECT 1 FROM user_configs WHERE "userId" = NEW."userId"
+    ) THEN
+        RAISE EXCEPTION
+            'El usuario no cuenta con una configuracion financiera activa.';
+    END IF;
+
+    RETURN NEW; -- Guardamos el registro si nada falla
+END;
+$$ LANGUAGE plpgsql;
