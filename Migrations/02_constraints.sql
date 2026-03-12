@@ -13,6 +13,12 @@ FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASC
 ALTER TABLE "ingresos_extra" ADD CONSTRAINT "ingresos_extra_userId_fk"
 FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+ALTER TABLE "metas" ADD CONSTRAINT "metas_userId_fk"
+FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "historial_ciclos" ADD CONSTRAINT "historial_ciclos_userId_fk"
+FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
 -- diaInicio puede ser hasta el 99 usado para representar el ultimo dia del mes
 ALTER TABLE "user_configs" ADD CONSTRAINT "check_dia_inicio"
     CHECK ("diaInicio" >= 1 AND "diaInicio" <=99);
@@ -26,3 +32,8 @@ ALTER TABLE "gastos" ADD CONSTRAINT "check_gasto_positivo"
 ALTER TABLE "ingresos_extra" ADD CONSTRAINT "check_ingreso_positivo"
     CHECK ("monto" > 0);
 
+ALTER TABLE "metas" ADD CONSTRAINT "check_meta_positiva"
+    CHECK ("objetivo" > 0);
+
+ALTER TABLE "historial_ciclos" ADD CONSTRAINT "check_sobrante_no_nulo"
+    CHECK ("sobranteReal" >= 0); -- El sobrante no puede quedar negativo y se deja automaticamente en 0

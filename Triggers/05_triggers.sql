@@ -11,6 +11,10 @@ CREATE TRIGGER actualizar_gastos_updatedAt
     BEFORE UPDATE ON "gastos" -- Antes de actualizar algo en la tabla gastos
     FOR EACH ROW EXECUTE FUNCTION actualizar_columna_updatedAt();
 
+CREATE TRIGGER actualizar_metas_updatedAt
+    BEFORE UPDATE ON "metas" -- Antes de actualizar algo en la tabla metas
+    FOR EACH ROW EXECUTE FUNCTION actualizar_columna_updatedAt();
+
 -- Impide que se registren gastos con un monto menor o igual a 0
 CREATE TRIGGER tr_validar_monto_gasto
     BEFORE INSERT ON "gastos" -- Antes de insertar algo en la tabla gastos

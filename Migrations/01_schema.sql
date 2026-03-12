@@ -71,3 +71,31 @@ CREATE TABLE "ingresos_extra" (
     CONSTRAINT "ingresos_extra_pkey" PRIMARY KEY ("id")
 );
 
+-- Tabla: metas
+CREATE TABLE "metas" (
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+    "nombre" TEXT NOT NULL,
+    "objetivo" DOUBLE PRECISION NOT NULL,
+    "acumulado" DOUBLE PRECISION NOT NULL DEFAULT 0,  -- Se calcula mediante el back mediante sp_transferencia_a_meta
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "userId" TEXT NOT NULL,
+    CONSTRAINT "metas_pkey" PRIMARY KEY ("id")
+);
+
+-- Tabla: historial_ciclos 
+CREATE TABLE "historial_ciclos" (
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+    "userId" TEXT NOT NULL,
+    "fechaInicio" DATE NOT NULL,
+    "fechaFin" DATE NOT NULL,
+    "frecuencia" "Frecuencia" NOT NULL,
+    "metaAhorroEsperada" DOUBLE PRECISION NOT NULL DEFAULT 0,  -- Se trata del ahorro base * 1.23 
+    "sobranteReal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "cumplioMeta" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "historial_ciclos_pkey" PRIMARY KEY ("id")
+);
+-- Los indices son para las consultas que ocupen el usuario y el orden cronologico
+CREATE INDEX "historial_ciclos_userId_idx" ON "historial_ciclos"("userId");
+CREATE INDEX "historial_ciclos_fechaFin_idx" ON "historial_ciclos"("fechaFin");
