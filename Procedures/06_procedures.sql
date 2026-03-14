@@ -184,3 +184,92 @@ $$;
 
 
 --------------------------------------------------------------------------
+-- Crea reportes del estado de ahorro de los usuarios.
+CREATE OR REPLACE PROCEDURE sp_generar_reporte_ahorro()
+LANGUAGE plpgsql AS $$
+
+DECLARE
+-- Cursor que recorre usuario por usuario pero solo aquellos que tengan 
+-- un ahorroHistorico mayor a 0 (que hayan cerrado al menos un ciclo)
+    cur_usuarios CURSOR FOR
+        SELECT u.id, u.name, uc."ahorroHistorico", uc.frecuencia::TEXT AS frec
+        FROM users u
+        JOIN user_configs uc ON uc."userId" = u.id
+        WHERE uc."ahorroHistorico" > 0;
+
+    v_registro_usuario RECORD;
+    v_promedio_sobrante DOUBLE PRECISION;
+    v_total_ciclos INTEGER;
+    v_ciclos_exitosos INTEGER;
+    v_tasa_exito DOUBLE PRECISION;
+    v_estado_final TEXT;
+    v_conteo_usuarios INTEGER := 0;
+
+
+BEGIN
+    -- Antes de generar un reporte hay que borrar el anterior ya que no es acumulativo
+    DELETE FROM reporte_ahorro_admin;
+
+    OPEN cur_usuarios;
+    LOOP
+        -- Agarra cada usuario de la lista y termina cuando no encuentra ninguno
+        FETCH cur_usuarios INTO v_registro_usuario; 
+        EXIT WHEN NOT FOUND;
+
+        -- Para cada usuario consulta el promedio del sobrante, cuantos ciclos ha cerrado
+        -- y en cuantos cumplió la meta 
+        SELECT
+            COALESCE(AVG("sobranteReal"), 0),
+            COUNT(*),
+            SUM(CASE WHEN "cumplioMeta" THEN 1 ELSE 0 END) -- convierte de bool a numero para la suma
+        INTO
+            v_promedio_sobrante,
+            v_total_ciclos,
+            v_ciclos_exitosos
+        FROM historial_ciclos
+        WHERE "userId" = v_registro_usuario.id;
+
+        -- Calculamos la tasa de exito y luego se valida 
+        -- si el usuario cumplio al menos la mitad de sus ciclos se considera como hipotesis validada
+        v_tasa_exito := ROUND(
+            (v_ciclos_exitosos::NUMERIC / NULLIF(v_total_ciclos, 0) * 100)::NUMERIC, 2
+        );
+        IF v_total_ciclos = 0 THEN
+            v_estado_final := 'Sin ciclos registrados';
+        ELSIF v_tasa_exito >= 50 THEN
+            v_estado_final := 'HIPOTESIS VALIDADA';
+        ELSE
+            v_estado_final := 'En progreso / No validada';
+        END IF;
+
+        -- Insertamos los datos en la tabla reporte_ahorro_admin correctamente
+        INSERT INTO reporte_ahorro_admin (
+            "userId", "nombre", "frecuencia", "ahorroHistorico",
+            "promedioSobrante", "tasaExitoPct", "totalCiclos",
+            "ciclosExitosos", "estado"
+        )
+        VALUES (
+            v_registro_usuario.id,
+            v_registro_usuario.name,
+            v_registro_usuario.frec,
+            v_registro_usuario."ahorroHistorico",
+            v_promedio_sobrante,
+            v_tasa_exito,
+            v_total_ciclos,
+            v_ciclos_exitosos,
+            v_estado_final
+        );
+        -- Contador de los usuarios para usarlo en el RAISE NOTICE 
+        v_conteo_usuarios := v_conteo_usuarios + 1;
+    END LOOP;
+    CLOSE cur_usuarios;
+
+    RAISE NOTICE 'Reporte generado para % usuarios.', v_conteo_usuarios;
+    COMMIT;
+
+EXCEPTION WHEN OTHERS THEN
+    CLOSE cur_usuarios;
+    ROLLBACK;
+    RAISE EXCEPTION 'Error al generar el reporte: %', SQLERRM;
+END;
+$$;
