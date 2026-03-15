@@ -56,3 +56,51 @@ GROUP BY u.id, u.name
 HAVING COUNT(hc.id) > 0 -- Filtramos solo los que tengan al menos un ciclo cerrado
 ORDER BY tasa_exito_pct DESC;
 
+-------------------------------------------------------------------------------------------
+/*Por cada usuario compara su ahorro base declarado contra lo que realmente
+ha sobrado en sus ciclos, calcula si supero los 23% y nos marca como hipotesis validada
+o en revisión en caso de no. */
+CREATE OR REPLACE VIEW vista_validacion_hipotesis AS
+SELECT
+    u.id AS usuario_id,
+    u.name AS nombre,
+    uc.frecuencia::TEXT AS tipo_ingreso,
+    
+    -- Mostramos el ahorro base del usuario y comparamos con el objetivo del 23%
+    uc."ahorroHistorico" AS ahorro_base_declarado,
+    ROUND(uc."ahorroHistorico" * 1.23, 2) AS objetivo_23_pct,
+
+    -- Calcula el promedio de lo que ha sobrado por ciclo
+    ROUND(COALESCE(AVG(hc."sobranteReal"), 0)::NUMERIC, 2) AS promedio_sobrante_por_ciclo,
+
+    COUNT(hc.id) AS total_ciclos,
+
+    SUM(CASE WHEN hc."cumplioMeta" THEN 1 ELSE 0 END) AS ciclos_con_meta_cumplida,
+
+    -- Metas cumplidas / total de ciclos * 100 para el porcentaje de exito
+    ROUND(
+        100.0 * SUM(CASE WHEN hc."cumplioMeta" THEN 1 ELSE 0 END)
+        / NULLIF(COUNT(hc.id), 0), 1
+    ) AS tasa_exito_porcentaje,
+
+    -- sobrante real - el ahorro base / ahorro base * 100 
+    -- Nos muestra cuanto ahorro de más o de menos a comparación de antes de usar la app
+    ROUND(
+        (COALESCE(AVG(hc."sobranteReal"), 0) - uc."ahorroHistorico")
+        / NULLIF(uc."ahorroHistorico", 0) * 100
+    )::NUMERIC AS diferencia_pct_sobre_base,
+
+    CASE
+        WHEN COUNT(hc.id) = 0 THEN 'Sin ciclos registrados' -- Si no tiene ciclos, no se puede validar la hipotesis
+        WHEN uc."ahorroHistorico" = 0 THEN 'Sin linea base' -- No podemos validar ya que no sabemos cuanto ahorraba antes
+        WHEN 100.0 * SUM(CASE WHEN hc."cumplioMeta" THEN 1 ELSE 0 END)
+             / NULLIF(COUNT(hc.id), 0) >= 50 THEN 'Hipotesis validada' -- Si cumple con el 50% o más de sus ciclos se valida la hipotesis
+        ELSE 'En revision' -- Si no cumple con el 50% de sus ciclos, se deja en revision
+    END AS estatus_hipotesis
+
+FROM users u
+JOIN user_configs uc ON uc."userId" = u.id -- Unimos con user_configs para obtener el ahorro base declarado
+LEFT JOIN historial_ciclos hc ON hc."userId" = u.id -- Unimos con historial_ciclos para obtener los ciclos cerrados
+WHERE uc."ahorroHistorico" > 0 -- Filtramos solo los que tengan al menos un ahorro base declarado
+GROUP BY u.id, u.name, uc.frecuencia, uc."ahorroHistorico" -- Agrupamos por usuario 
+ORDER BY tasa_exito_porcentaje DESC NULLS LAST; 
